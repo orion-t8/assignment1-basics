@@ -1,5 +1,7 @@
 import os
 from typing import BinaryIO
+from collections import Counter
+import regex as re
 
 
 def find_chunk_boundaries(
@@ -48,15 +50,67 @@ def find_chunk_boundaries(
     # Make sure all boundaries are unique, but might be fewer than desired_num_chunks
     return sorted(set(chunk_boundaries))
 
+def compute_freq(text: str) -> Counter[tuple[bytes, ...]]:
+    freq: Counter[tuple[bytes, ...]] = Counter()
+    pattern = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+    for match in re.finditer(pattern, text):
+        bytes_tuple = tuple(map(lambda k: bytes([k]), list(match.group().encode('UTF-8'))))
+        freq.update([bytes_tuple])
+    return freq
 
+def count_adjacent_pairs(freq: Counter[tuple[bytes, ...]]) -> Counter[tuple[bytes, bytes]]:
+    counts: Counter[tuple[bytes, bytes]] = Counter()
+    for key, value in freq.items():
+        for first, second in zip(key[:-1], key[1:]):
+            counts[(first, second)] += value
+    return counts
+
+def merge(freq: Counter[tuple[bytes, ...]], pair: tuple[bytes, bytes]) -> Counter[tuple[bytes, ...]]:
+    res: Counter[tuple[bytes, ...]] = Counter()
+    for key, value in freq.items():
+        i = 0
+        merged: tuple[bytes, ...] = tuple()
+        while i < len(key) - 1:
+            if key[i] == pair[0] and key[i+1] == pair[1]:
+                merged += (pair[0] + pair[1],)
+                i += 2
+            else:
+                merged += (key[i],)
+                i += 1
+        assert i == len(key) - 1 or i == len(key)
+        if i == len(key) - 1:
+            merged += (key[i], )
+        res[merged] = value
+    return res
+
+'''
 ## Usage
+eot = b"<|endoftext|>"
+num_merges = 3
 with open(..., "rb") as f:
     num_processes = 4
-    boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
+    boundaries = find_chunk_boundaries(f, num_processes, eot)
 
     # The following is a serial implementation, but you can parallelize this
     # by sending each start/end pair to a set of processes.
+    freq: Counter[tuple[bytes, ...]] = Counter()
     for start, end in zip(boundaries[:-1], boundaries[1:]):
         f.seek(start)
         chunk = f.read(end - start).decode("utf-8", errors="ignore")
         # Run pre-tokenization on your chunk and store the counts for each pre-token
+        pattern = '|'.join(re.escape("<|endoftext|>")) 
+        splitted_chunk = re.split(pattern, chunk)
+        for t in splitted_chunk:
+            freq += compute_freq(t)
+
+    vocab: dict[int, bytes] = {i: bytes([i]) for i in range(256)}
+    vocab[len(vocab)] = eot
+    merges: list[tuple[bytes, bytes]] = []
+
+    for i in range(num_merges):
+        counts: Counter[tuple[bytes, bytes]] = count_adjacent_pairs(freq)
+        pair = max(counts, key=lambda k: (counts[k], k))
+        merges.append(pair)
+        vocab[len(vocab)] = pair[0] + pair[1]
+        freq = merge(freq, pair)
+'''
