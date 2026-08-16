@@ -1,4 +1,4 @@
-from cs336_basics.pretokenization_example import compute_freq, count_adjacent_pairs, merge
+from cs336_basics.pretokenization_example import compute_freq, count_adjacent_pairs, merge, train_bpe
 from collections import Counter
 
 def test_compute_freq():
@@ -85,3 +85,30 @@ def test_merge():
 
     freq = Counter({(b'l', b'l', b'l'): 1})
     assert merge(freq, pair) == Counter({(b'll', b'l'): 1})
+
+def test_train_bpe():
+    special_tokens = ["<|endoftext|>"]
+    input_file = "./data/pretokenization_example.txt"
+    vocab, merges = train_bpe(input_file, 258, special_tokens)
+    assert merges == [(b's', b't')]
+    assert vocab[257] == b'st'
+
+    vocab, merges = train_bpe(input_file, 259, special_tokens)
+    assert merges == [(b's', b't'), (b'e', b'st')]
+    assert vocab[257] == b'st' and vocab[258] == b'est'
+
+    vocab, merges = train_bpe(input_file, 263, special_tokens)
+    assert merges == [(b's', b't'),
+                      (b'e', b'st'),
+                      (b'o', b'w'),
+                      (b'l', b'ow'),
+                      (b'w', b'est'),
+                      (b'n', b'e')]
+    assert (vocab[257] == b'st' and vocab[258] == b'est' and vocab[259] == b'ow' and vocab[260] == b'low' and
+            vocab[261] == b'west' and vocab[262] == b'ne')
+
+def test_profile_train_bpe():
+    special_tokens = ["<|endoftext|>"]
+    input_file = "./data/TinyStoriesV2-GPT4-valid.txt"
+    vocab_size = 10000
+    vocab, merges = train_bpe(input_file, vocab_size, special_tokens)

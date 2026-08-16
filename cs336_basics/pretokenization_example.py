@@ -83,34 +83,38 @@ def merge(freq: Counter[tuple[bytes, ...]], pair: tuple[bytes, bytes]) -> Counte
         res[merged] = value
     return res
 
-'''
-## Usage
-eot = b"<|endoftext|>"
-num_merges = 3
-with open(..., "rb") as f:
-    num_processes = 4
-    boundaries = find_chunk_boundaries(f, num_processes, eot)
+def train_bpe(input_file: str, vocab_size: int, special_tokens: list[str]) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
+    assert len(special_tokens) >= 1
+    # avoid such case: |<end>|, |<endoftext>|, then splitting first on |<end>| will chunk |<endoftext>| into two parts
+    st_sorted = sorted(special_tokens, key=len, reverse=True)
+    st_example = st_sorted[0].encode('UTF-8')
+    with open(input_file, "rb") as f:
+        num_processes = 4
+        boundaries = find_chunk_boundaries(f, num_processes, st_example)
 
-    # The following is a serial implementation, but you can parallelize this
-    # by sending each start/end pair to a set of processes.
-    freq: Counter[tuple[bytes, ...]] = Counter()
-    for start, end in zip(boundaries[:-1], boundaries[1:]):
-        f.seek(start)
-        chunk = f.read(end - start).decode("utf-8", errors="ignore")
-        # Run pre-tokenization on your chunk and store the counts for each pre-token
-        pattern = '|'.join(re.escape("<|endoftext|>")) 
-        splitted_chunk = re.split(pattern, chunk)
-        for t in splitted_chunk:
-            freq += compute_freq(t)
+        # The following is a serial implementation, but you can parallelize this
+        # by sending each start/end pair to a set of processes.
+        freq: Counter[tuple[bytes, ...]] = Counter()
+        for start, end in zip(boundaries[:-1], boundaries[1:]):
+            f.seek(start)
+            chunk = f.read(end - start).decode("utf-8", errors="ignore")
+            # Run pre-tokenization on your chunk and store the counts for each pre-token
+            pattern = '|'.join(re.escape(st) for st in st_sorted)
+            splitted_chunk = re.split(pattern, chunk)
+            for t in splitted_chunk:
+                freq += compute_freq(t)
 
-    vocab: dict[int, bytes] = {i: bytes([i]) for i in range(256)}
-    vocab[len(vocab)] = eot
+    vocab: dict[int, bytes] = {i: st_sorted[i].encode('UTF-8') for i in range(len(st_sorted))}
+    for i in range(256):
+        vocab[len(st_sorted) + i] = bytes([i])
     merges: list[tuple[bytes, bytes]] = []
 
-    for i in range(num_merges):
+    while len(vocab) < vocab_size:
         counts: Counter[tuple[bytes, bytes]] = count_adjacent_pairs(freq)
+        if len(counts) == 0:
+            break
         pair = max(counts, key=lambda k: (counts[k], k))
         merges.append(pair)
         vocab[len(vocab)] = pair[0] + pair[1]
         freq = merge(freq, pair)
-'''
+    return vocab, merges

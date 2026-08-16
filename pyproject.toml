@@ -30,6 +30,14 @@ default = true
 requires = ["uv_build>=0.11.0,<0.12.0"]
 build-backend = "uv_build"
 
+[dependency-groups]
+dev = [
+    "pytest-line-profiler>=0.2.1",
+    "pytest-profiling>=1.8.1",
+    "scalene>=2.3.0",
+    "snakeviz>=2.2.2",
+]
+
 [tool.uv.build-backend]
 module-name = "cs336_basics"
 module-root = ""
