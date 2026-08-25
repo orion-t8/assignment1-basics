@@ -1,5 +1,6 @@
-from cs336_basics.pretokenization_example import compute_freq, count_adjacent_pairs, merge, train_bpe
+from cs336_basics.pretokenization_example import compute_freq, count_adjacent_pairs, merge, train_bpe, train_bpe_parallel
 from collections import Counter
+import time
 
 def test_compute_freq():
     freq = compute_freq("")
@@ -37,24 +38,36 @@ def test_compute_freq():
 
 def test_count_adjacent_pairs():
     freq = compute_freq("")
-    counts = count_adjacent_pairs(freq)
+    counts, pair2bytes = count_adjacent_pairs(freq)
     assert counts == Counter()
+    assert pair2bytes == {}
 
     freq = compute_freq(" ")
-    counts = count_adjacent_pairs(freq)
+    counts, pair2bytes = count_adjacent_pairs(freq)
     assert counts == Counter()
+    assert pair2bytes == {}
 
     freq = compute_freq("hhhhh")
-    counts = count_adjacent_pairs(freq)
+    counts, pair2bytes = count_adjacent_pairs(freq)
     assert counts == {(b'h', b'h'): 4}
+    assert pair2bytes == {(b'h', b'h'): {(b'h', b'h', b'h', b'h', b'h')}}
 
     freq = compute_freq("hello")
-    counts = count_adjacent_pairs(freq)
+    counts, pair2bytes = count_adjacent_pairs(freq)
     reference = {(b'h', b'e'): 1,
                  (b'e', b'l'): 1,
                  (b'l', b'l'): 1,
                  (b'l', b'o'): 1}
     assert counts == reference
+    assert pair2bytes == {(b'h', b'e'): {(b'h', b'e', b'l', b'l', b'o')},
+                          (b'e', b'l'): {(b'h', b'e', b'l', b'l', b'o')},
+                          (b'l', b'l'): {(b'h', b'e', b'l', b'l', b'o')},
+                          (b'l', b'o'): {(b'h', b'e', b'l', b'l', b'o')}}
+
+    freq = compute_freq("abab")
+    counts, pair2bytes = count_adjacent_pairs(freq)
+    assert counts == {(b'a', b'b'): 2, (b'b', b'a'): 1}
+    assert pair2bytes == {(b'a', b'b'): {(b'a', b'b', b'a', b'b')}, (b'b', b'a'): {(b'a', b'b', b'a', b'b')}}
 
 def test_merge():
     pair = (b'h', b'e')
@@ -112,3 +125,32 @@ def test_profile_train_bpe():
     input_file = "./data/TinyStoriesV2-GPT4-valid.txt"
     vocab_size = 10000
     vocab, merges = train_bpe(input_file, vocab_size, special_tokens)
+
+def test_train_bpe_parallel():
+    special_tokens = ["<|endoftext|>"]
+    """
+    input_file = "./data/pretokenization_example3.txt"
+    start = time.perf_counter()
+    vocab_serial, merges_serial = train_bpe(input_file, 300, special_tokens, 4)
+    end = time.perf_counter()
+    print(f"串行耗时: {(end - start) * 1000:.3f} ms")
+
+    start = time.perf_counter()
+    vocab_parallel, merges_parallel = train_bpe_parallel(input_file, 300, special_tokens, 4)
+    end = time.perf_counter()
+    print(f"并行耗时: {(end - start) * 1000:.3f} ms")
+    assert vocab_serial == vocab_parallel and merges_serial == merges_parallel
+    """
+
+    input_file = "./tests/fixtures/tinystories_sample_5M.txt"
+    num_processes = 4
+    start = time.perf_counter()
+    vocab_serial, merges_serial = train_bpe(input_file, 257, special_tokens, num_processes)
+    end = time.perf_counter()
+    print(f"串行耗时: {(end - start) * 1000:.3f} ms")
+
+    start = time.perf_counter()
+    vocab_parallel, merges_parallel = train_bpe_parallel(input_file, 257, special_tokens, num_processes)
+    end = time.perf_counter()
+    print(f"并行耗时: {(end - start) * 1000:.3f} ms")
+    assert vocab_serial == vocab_parallel and merges_serial == merges_parallel

@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug BPE parent process",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "args": [
+                "tests/test_bpe_helper.py::test_train_bpe_parallel",
+                "-s",
+                "-vv"
+            ],
+            "subProcess": false,
+            "justMyCode": true,
+            "console": "integratedTerminal"
+        }
+    ]
+}
