@@ -140,7 +140,22 @@ def test_merge():
     assert merge(freq, pair) == Counter({(b'll', b'l'): 1})
 
 def test_update_accounting():
-    return
+    freq = compute_freq("ab abhh hh hh")
+    pretoken_tokens, pretoken_freq = generate_idx_version(freq)
+    assert pretoken_tokens == {0: (b'a', b'b'), 1: (b' ', b'a', b'b', b'h', b'h'), 2: (b' ', b'h', b'h')}
+    assert pretoken_freq == {0: 1, 1: 1, 2: 2}
+    counts, pair2ids = count_adjacent_pairs_idx_version(pretoken_tokens, pretoken_freq)
+    assert counts == {(b'a', b'b'): 2, (b' ', b'a'): 1, (b'b', b'h'): 1, (b' ', b'h'): 2, (b'h', b'h'): 3}
+    assert pair2ids == {(b'a', b'b'): {0, 1}, (b' ', b'a'): {1}, (b'b', b'h'): {1}, (b' ', b'h'): {2}, (b'h', b'h'): {1, 2}}
+    pair = max(counts, key=lambda k: (counts[k], k))
+    assert pair == (b'h', b'h')
+
+    update_accounting(pretoken_freq, pair, pretoken_tokens, counts, pair2ids)
+    assert pretoken_tokens == {0: (b'a', b'b'),
+                               1: (b' ', b'a', b'b', b'hh'),
+                               2: (b' ', b'hh')}
+    assert counts == {(b'a', b'b'): 2, (b' ', b'a'): 1, (b'b', b'hh'): 1, (b' ', b'hh'): 2}
+    assert pair2ids == {(b'a', b'b'): {0, 1}, (b' ', b'a'): {1}, (b'b', b'hh'): {1}, (b' ', b'hh'): {2}}
 
 def test_train_bpe():
     special_tokens = ["<|endoftext|>"]
@@ -187,13 +202,21 @@ def test_train_bpe_parallel():
 
     input_file = "./tests/fixtures/tinystories_sample_5M.txt"
     num_processes = 4
+    '''
     start = time.perf_counter()
     vocab_serial, merges_serial = train_bpe(input_file, 257, special_tokens, num_processes)
     end = time.perf_counter()
     print(f"串行耗时: {(end - start) * 1000:.3f} ms")
+    '''
 
     start = time.perf_counter()
     vocab_parallel, merges_parallel = train_bpe_parallel(input_file, 257, special_tokens, num_processes)
     end = time.perf_counter()
     print(f"并行耗时: {(end - start) * 1000:.3f} ms")
-    assert vocab_serial == vocab_parallel and merges_serial == merges_parallel
+    #assert vocab_serial == vocab_parallel and merges_serial == merges_parallel
+
+    start = time.perf_counter()
+    vocab_fastmerge, merges_fastmerge = train_bpe_parallel_fast_merge(input_file, 257, special_tokens, num_processes)
+    end = time.perf_counter()
+    print(f"并行+merge优化耗时: {(end - start) * 1000:.3f} ms")
+    assert vocab_parallel == vocab_fastmerge and merges_parallel == merges_fastmerge

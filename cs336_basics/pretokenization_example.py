@@ -130,26 +130,27 @@ def compute_pair_count(token: tuple[bytes, ...], freq:int = 1):
 
 
 def update_accounting(freq: Counter[int],
-                      pair: tuple[bytes, bytes],
+                      pair_to_merge: tuple[bytes, bytes],
                       tokens: dict[int, tuple[bytes, ...]],
                       counts: Counter[tuple[bytes, bytes]],
                       pair2ids: defaultdict[tuple[bytes, bytes], set[int]]):
-    for idx in pair2ids[pair]:
+    for idx in list(pair2ids[pair_to_merge]): # use list() to create a copy of keys
         token = tokens[idx]
         # subtract pair count and pair mapping corresponding to this token
         old_count = compute_pair_count(token, freq[idx])
         counts -= old_count
-        counts = +counts
         for pair in old_count.keys():
+            if counts[pair] <= 0:
+                del counts[pair]
             pair2ids[pair].remove(idx)
             if not pair2ids[pair]:
                 del pair2ids[pair]
 
         # merge the pair in this token
-        tokens[idx] = merge_pair(pair, token)
+        tokens[idx] = merge_pair(pair_to_merge, token)
 
         # add pair count and pair mappings correponding to the merged token
-        new_count = compute_pair_count(token, freq[idx])
+        new_count = compute_pair_count(tokens[idx], freq[idx])
         counts += new_count
         for pair in new_count.keys():
             pair2ids[pair].add(idx)
