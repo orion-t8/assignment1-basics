@@ -62,34 +62,50 @@ def compute_freq(text: str) -> Counter[tuple[bytes, ...]]:
         freq.update([bytes_tuple])
     return freq
 
-def count_adjacent_pairs(freq: Counter[tuple[bytes, ...]]) -> tuple[Counter[tuple[bytes, bytes]], defaultdict[tuple[bytes, bytes], Counter[tuple[bytes, ...]]]]:
+def count_adjacent_pairs(freq: Counter[tuple[bytes, ...]]) -> Counter[tuple[bytes, bytes]]:
     """
     Count occurrences of adjacent pairs.
     Return count and the indexing of adjacent pair to the set of byte strings that contribute to its count
     """
     counts: Counter[tuple[bytes, bytes]] = Counter()
-    pair2bytes: defaultdict[tuple[bytes, bytes], Counter[tuple[bytes, ...]]] = defaultdict(Counter)
     for key, value in freq.items():
         for pair in zip(key[:-1], key[1:]):
             counts[pair] += value
-            pair2bytes[pair][key] += 1
-    return counts, pair2bytes
+    return counts
+
+def count_adjacent_pairs_idx_version(pretoken_tokens: dict[int, tuple[bytes,...]], pretoken_freq: Counter[int]) -> tuple[Counter[tuple[bytes, bytes]], defaultdict[tuple[bytes, bytes], set[int]]]:
+    """
+    Count occurrences of adjacent pairs.
+    Return count and the indexing of adjacent pair to the set of byte strings that contribute to its count
+    """
+    counts: Counter[tuple[bytes, bytes]] = Counter()
+    pair2ids: defaultdict[tuple[bytes, bytes], set[int]] = defaultdict(set)
+    for idx, freq in pretoken_freq.items():
+        token = pretoken_tokens[idx]
+        for pair in zip(token[:-1], token[1:]):
+            counts[pair] += freq
+            pair2ids[pair].add(idx)
+    return counts, pair2ids
+
+def merge_pair(pair: tuple[bytes, bytes], token: tuple[bytes, ...]) -> tuple[bytes, ...]:
+    i = 0
+    merged: tuple[bytes, ...] = tuple()
+    while i < len(token) - 1:
+        if token[i] == pair[0] and token[i+1] == pair[1]:
+            merged += (pair[0] + pair[1],)
+            i += 2
+        else:
+            merged += (token[i],)
+            i += 1
+    assert i == len(token) - 1 or i == len(token)
+    if i == len(token) - 1:
+        merged += (token[i], )
+    return merged
 
 def merge(freq: Counter[tuple[bytes, ...]], pair: tuple[bytes, bytes]) -> Counter[tuple[bytes, ...]]:
     res: Counter[tuple[bytes, ...]] = Counter()
     for key, value in freq.items():
-        i = 0
-        merged: tuple[bytes, ...] = tuple()
-        while i < len(key) - 1:
-            if key[i] == pair[0] and key[i+1] == pair[1]:
-                merged += (pair[0] + pair[1],)
-                i += 2
-            else:
-                merged += (key[i],)
-                i += 1
-        assert i == len(key) - 1 or i == len(key)
-        if i == len(key) - 1:
-            merged += (key[i], )
+        merged = merge_pair(pair, key)
         res[merged] = value
     return res
 
@@ -106,48 +122,47 @@ def process_chunk(input_file: str, start: int, end: int, special_tokens: list[st
             freq += compute_freq(t)
     return freq
 
-def update_accounting(freq: Counter[tuple[bytes, ...]],
-                      pair: tuple[bytes, bytes],
-                      counts: Counter[tuple[bytes, bytes]],
-                      pair2bytes: defaultdict[tuple[bytes, bytes], Counter[tuple[bytes, ...]]]) -> tuple[Counter[tuple[bytes, bytes]], defaultdict[tuple[bytes, bytes], Counter[tuple[bytes, ...]]]]:
-    new_counts = counts.copy()
-    new_pair2bytes = copy.deepcopy(pair2bytes)
-    for bytes_tuple in pair2bytes[pair]:
-        for i in range(len(bytes_tuple) - 1):
-            if bytes_tuple[i] != pair[0] or bytes_tuple[i+1] != pair[1]:
-                continue
-            count = freq[bytes_tuple]
-            # first, update counts and mapping of the pair itself
-            new_counts[pair] -= count
-            new_counts = +new_counts
-            new_pair2bytes[pair][bytes_tuple] -= 1
-            new_pair2bytes[pair] = +new_pair2bytes[pair]
-            if i > 0:
-                # Consider *, A, B. Update pair (*, AB)
-                new_pair = (bytes_tuple[i-1], pair[0] + pair[1])
-                new_counts[new_pair] += count
-                new_pair2bytes[new_pair][bytes_tuple] += 1
-                # update pair (*, A)
-                affected_pair = (bytes_tuple[i-1], pair[0])
-                new_counts[affected_pair] -= count
-                new_counts = +new_counts
-                new_pair2bytes[affected_pair][bytes_tuple] -= 1
-                new_pair2bytes[affected_pair] = +new_pair2bytes[affected_pair]
-            if i < len(bytes_tuple) - 2:
-                # Consider A, B, *. Update pair (AB, *)
-                new_pair = (pair[0] + pair[1], bytes_tuple[i-1])
-                new_counts[new_pair] += count
-                new_pair2bytes[new_pair][bytes_tuple] += 1
-                # update pair (B, *)
-                affected_pair = (pair[1], bytes_tuple[i+2])
-                new_counts[affected_pair] -= count
-                new_counts = +new_counts
-                new_pair2bytes[affected_pair][bytes_tuple] -= 1
-                new_pair2bytes[affected_pair] = +new_pair2bytes[affected_pair]
-    assert new_counts[pair] == 0
-    assert len(new_pair2bytes[pair]) == 0
-    return new_counts, new_pair2bytes
+def compute_pair_count(token: tuple[bytes, ...], freq:int = 1):
+    count: Counter[tuple[bytes, bytes]] = Counter()
+    for pair in zip(token[:-1], token[1:]):
+        count[pair] += freq
+    return count
 
+
+def update_accounting(freq: Counter[int],
+                      pair: tuple[bytes, bytes],
+                      tokens: dict[int, tuple[bytes, ...]],
+                      counts: Counter[tuple[bytes, bytes]],
+                      pair2ids: defaultdict[tuple[bytes, bytes], set[int]]):
+    for idx in pair2ids[pair]:
+        token = tokens[idx]
+        # subtract pair count and pair mapping corresponding to this token
+        old_count = compute_pair_count(token, freq[idx])
+        counts -= old_count
+        counts = +counts
+        for pair in old_count.keys():
+            pair2ids[pair].remove(idx)
+            if not pair2ids[pair]:
+                del pair2ids[pair]
+
+        # merge the pair in this token
+        tokens[idx] = merge_pair(pair, token)
+
+        # add pair count and pair mappings correponding to the merged token
+        new_count = compute_pair_count(token, freq[idx])
+        counts += new_count
+        for pair in new_count.keys():
+            pair2ids[pair].add(idx)
+
+
+def generate_idx_version(freq: Counter[tuple[bytes, ...]] = Counter()) -> tuple[dict[int, tuple[bytes, ...]], Counter[int]]:
+    # compute pretoken_tokens[id], pretoken_freq[id]
+    pretoken_tokens: dict[int, tuple[bytes, ...]] = dict() # dict value will change due to merging operation
+    pretoken_freq: Counter[int] = Counter() # invariant throughout merging
+    for idx, (key, value) in enumerate(freq.items()):
+        pretoken_tokens[idx] = key
+        pretoken_freq[idx] = value
+    return pretoken_tokens, pretoken_freq
 
 def train_bpe_parallel_fast_merge(input_file: str, vocab_size: int, special_tokens: list[str], num_processes: int = 1) -> tuple[dict[int, bytes], list[tuple[bytes, bytes]]]:
     assert len(special_tokens) >= 1
@@ -180,9 +195,12 @@ def train_bpe_parallel_fast_merge(input_file: str, vocab_size: int, special_toke
     for r in results:
         freq += r
 
+    pretoken_tokens, pretoken_freq = generate_idx_version(freq)
+
     vocab: dict[int, bytes] = {i: st_sorted[i].encode('UTF-8') for i in range(len(st_sorted))}
     for i in range(256):
         vocab[len(st_sorted) + i] = bytes([i])
+
     merges: list[tuple[bytes, bytes]] = []
 
     if PROFILE_TIMING:
@@ -190,7 +208,7 @@ def train_bpe_parallel_fast_merge(input_file: str, vocab_size: int, special_toke
 
     # No need to count and merge every time, but instead track the following two indices:
     # adjacent pair counts and which pretokens contribute to the count
-    counts, pair2bytes = count_adjacent_pairs(freq)
+    counts, pair2ids = count_adjacent_pairs_idx_version(pretoken_tokens, pretoken_freq)
     while len(vocab) < vocab_size:
         # if all pretokens are merged into one token, then break
         if len(counts) == 0:
@@ -198,7 +216,7 @@ def train_bpe_parallel_fast_merge(input_file: str, vocab_size: int, special_toke
         pair = max(counts, key=lambda k: (counts[k], k))
         merges.append(pair)
         vocab[len(vocab)] = pair[0] + pair[1]
-        counts, pair2bytes = update_accounting(freq, pair, counts, pair2bytes)
+        update_accounting(pretoken_freq, pair, pretoken_tokens, counts, pair2ids)
     if PROFILE_TIMING:
         end = time.perf_counter()
         print(f"merge loop: {(end - start) * 1000:.3f} ms")
@@ -243,7 +261,7 @@ def train_bpe_parallel(input_file: str, vocab_size: int, special_tokens: list[st
     if PROFILE_TIMING:
         start = time.perf_counter()
     while len(vocab) < vocab_size:
-        counts, _ = count_adjacent_pairs(freq)
+        counts = count_adjacent_pairs(freq)
         if len(counts) == 0:
             break
         pair = max(counts, key=lambda k: (counts[k], k))
@@ -294,7 +312,7 @@ def train_bpe(input_file: str, vocab_size: int, special_tokens: list[str], num_p
     if PROFILE_TIMING:
         start_time = time.perf_counter()
     while len(vocab) < vocab_size:
-        counts, _ = count_adjacent_pairs(freq)
+        counts = count_adjacent_pairs(freq)
         if len(counts) == 0:
             break
         pair = max(counts, key=lambda k: (counts[k], k))
