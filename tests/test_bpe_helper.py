@@ -202,21 +202,22 @@ def test_train_bpe_parallel():
 
     input_file = "./tests/fixtures/tinystories_sample_5M.txt"
     num_processes = 4
+    vocab_size = 500
     '''
     start = time.perf_counter()
-    vocab_serial, merges_serial = train_bpe(input_file, 257, special_tokens, num_processes)
+    vocab_serial, merges_serial = train_bpe(input_file, vocab_size, special_tokens, num_processes)
     end = time.perf_counter()
     print(f"串行耗时: {(end - start) * 1000:.3f} ms")
     '''
 
     start = time.perf_counter()
-    vocab_parallel, merges_parallel = train_bpe_parallel(input_file, 257, special_tokens, num_processes)
+    vocab_parallel, merges_parallel = train_bpe_parallel(input_file, vocab_size, special_tokens, num_processes)
     end = time.perf_counter()
     print(f"并行耗时: {(end - start) * 1000:.3f} ms")
     #assert vocab_serial == vocab_parallel and merges_serial == merges_parallel
 
     start = time.perf_counter()
-    vocab_fastmerge, merges_fastmerge = train_bpe_parallel_fast_merge(input_file, 257, special_tokens, num_processes)
+    vocab_fastmerge, merges_fastmerge = train_bpe_parallel_fast_merge(input_file, vocab_size, special_tokens, num_processes)
     end = time.perf_counter()
     print(f"并行+merge优化耗时: {(end - start) * 1000:.3f} ms")
     assert vocab_parallel == vocab_fastmerge and merges_parallel == merges_fastmerge

@@ -164,3 +164,4 @@ cython_debug/
 .vscode/settings.json
 profile.prof
 data/
+tests/*.prof

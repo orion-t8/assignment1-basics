@@ -122,27 +122,27 @@ def process_chunk(input_file: str, start: int, end: int, special_tokens: list[st
             freq += compute_freq(t)
     return freq
 
-def compute_pair_count(token: tuple[bytes, ...], freq:int = 1):
-    count: Counter[tuple[bytes, bytes]] = Counter()
-    for pair in zip(token[:-1], token[1:]):
-        count[pair] += freq
-    return count
-
 
 def update_accounting(freq: Counter[int],
                       pair_to_merge: tuple[bytes, bytes],
                       tokens: dict[int, tuple[bytes, ...]],
                       counts: Counter[tuple[bytes, bytes]],
                       pair2ids: defaultdict[tuple[bytes, bytes], set[int]]):
+    token_size = 0
+    num_indices = len(pair2ids[pair_to_merge])
+    if PROFILE_TIMING:
+        print("#ids to scan: %d, percentage: %f" % (num_indices, num_indices / len(freq)))
+
     for idx in list(pair2ids[pair_to_merge]): # use list() to create a copy of keys
         token = tokens[idx]
+        if PROFILE_TIMING:
+            token_size += len(token)
         # subtract pair count and pair mapping corresponding to this token
-        old_count = compute_pair_count(token, freq[idx])
-        counts -= old_count
-        for pair in old_count.keys():
+        for pair in zip(token[:-1], token[1:]):
+            counts[pair] -= freq[idx]
             if counts[pair] <= 0:
                 del counts[pair]
-            pair2ids[pair].remove(idx)
+            pair2ids[pair].discard(idx)
             if not pair2ids[pair]:
                 del pair2ids[pair]
 
@@ -150,10 +150,11 @@ def update_accounting(freq: Counter[int],
         tokens[idx] = merge_pair(pair_to_merge, token)
 
         # add pair count and pair mappings correponding to the merged token
-        new_count = compute_pair_count(tokens[idx], freq[idx])
-        counts += new_count
-        for pair in new_count.keys():
+        for pair in zip(tokens[idx][:-1], tokens[idx][1:]):
+            counts[pair] += freq[idx]
             pair2ids[pair].add(idx)
+    if PROFILE_TIMING:
+        print("Avg token length: %f" % (token_size / num_indices))
 
 
 def generate_idx_version(freq: Counter[tuple[bytes, ...]] = Counter()) -> tuple[dict[int, tuple[bytes, ...]], Counter[int]]:
