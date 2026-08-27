@@ -162,6 +162,6 @@ cython_debug/
 .ruff_cache/
 *.zip
 .vscode/settings.json
-profile.prof
 data/
-tests/*.prof
+output/
+profile/

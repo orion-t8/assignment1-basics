@@ -4,7 +4,7 @@ from collections import Counter, defaultdict
 import regex as re
 from concurrent.futures import ProcessPoolExecutor
 import time
-import copy
+from tqdm import tqdm
 
 PROFILE_TIMING = False
 
@@ -211,14 +211,17 @@ def train_bpe_parallel_fast_merge(input_file: str, vocab_size: int, special_toke
     # No need to count and merge every time, but instead track the following two indices:
     # adjacent pair counts and which pretokens contribute to the count
     counts, pair2ids = count_adjacent_pairs_idx_version(pretoken_tokens, pretoken_freq)
-    while len(vocab) < vocab_size:
-        # if all pretokens are merged into one token, then break
-        if len(counts) == 0:
-            break
-        pair = max(counts, key=lambda k: (counts[k], k))
-        merges.append(pair)
-        vocab[len(vocab)] = pair[0] + pair[1]
-        update_accounting(pretoken_freq, pair, pretoken_tokens, counts, pair2ids)
+    num_merges_to_learn = vocab_size - len(vocab)
+    with tqdm(total=num_merges_to_learn, desc="BPE Merges") as pbar:
+        while len(vocab) < vocab_size:
+            # if all pretokens are merged into one token, then break
+            if len(counts) == 0:
+                break
+            pair = max(counts, key=lambda k: (counts[k], k))
+            merges.append(pair)
+            vocab[len(vocab)] = pair[0] + pair[1]
+            update_accounting(pretoken_freq, pair, pretoken_tokens, counts, pair2ids)
+            pbar.update(1)
     if PROFILE_TIMING:
         end = time.perf_counter()
         print(f"merge loop: {(end - start) * 1000:.3f} ms")
