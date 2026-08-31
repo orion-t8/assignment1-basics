@@ -58,6 +58,7 @@ def compute_freq(text: str) -> Counter[tuple[bytes, ...]]:
     freq: Counter[tuple[bytes, ...]] = Counter()
     pattern = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     for match in re.finditer(pattern, text):
+        # generate tuples e.g., 'hello' -> (b'h', b'e', b'l', b'l', b'o')
         bytes_tuple = tuple(map(lambda k: bytes([k]), list(match.group().encode('UTF-8'))))
         freq.update([bytes_tuple])
     return freq
