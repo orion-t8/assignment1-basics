@@ -4,7 +4,7 @@ import pickle
 
 from cs336_basics.pretokenization_example import merge_pair
 
-def merge_chunk(merges: list[tuple[bytes, bytes]], text: str) -> list[bytes]:
+def merge_chunk(merges: list[tuple[bytes, bytes]], text: str) -> tuple[bytes, ...]:
     text_bytes = tuple(map(lambda k: bytes([k]), list(text.encode('UTF-8'))))
     # track the ordered list of pairs, find the pair that appears first in self.merges, merge the pair and update the list
     while True:
@@ -29,11 +29,13 @@ class Tokenizer:
         self.bytes2ids: dict[bytes, int] = dict()
         for idx, b in vocab.items():
             self.bytes2ids[b] = idx
-        self.special_tokens = sorted(special_tokens, key=len, reverse=True)
-        self.st2bytes = {st: st.encode('UTF-8') for st in self.special_tokens}
-        st_pattern = '|'.join(re.escape(st) for st in self.special_tokens)
-        self.st_pattern = re.compile(f'({st_pattern})')
         self.pretokenize_pattern = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+        self.special_tokens = special_tokens
+        if self.special_tokens:
+            self.special_tokens = sorted(self.special_tokens, key=len, reverse=True)
+            self.st2bytes = {st: st.encode('UTF-8') for st in self.special_tokens}
+            st_pattern = '|'.join(re.escape(st) for st in self.special_tokens)
+            self.st_pattern = re.compile(f'({st_pattern})')
 
     @classmethod
     def from_file(cls, vocab_filepath: str, merges_filepath: str, special_tokens: list[str] | None=None):
@@ -44,8 +46,13 @@ class Tokenizer:
         return cls(vocab, merges, special_tokens)
 
     def encode(self, text: str) -> list[int]:
+        res: list[int] = []
+        if not self.special_tokens:
+            for match in re.finditer(self.pretokenize_pattern, text):
+                res += [self.bytes2ids[b] for b in merge_chunk(self.merges, match.group())]
+            return res
+
         # split by special tokens
-        res = []
         parts = self.st_pattern.split(text) # even index is text, odd inedex is delimitter
         for i in range(len(parts)):
             if i % 2 == 0:
@@ -53,7 +60,7 @@ class Tokenizer:
                     res += [self.bytes2ids[b] for b in merge_chunk(self.merges, match.group())]
             else:
                 res += [self.bytes2ids[self.st2bytes[parts[i]]]]
-        raise res
+        return res
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
         for text in iterable:
