@@ -11,7 +11,7 @@ from torch import Tensor
 
 from cs336_basics.pretokenization_example import train_bpe_parallel_fast_merge
 from cs336_basics.tokenizer import Tokenizer
-from cs336_basics.linear import Linear
+from cs336_basics.model import Linear, Embedding, RMSNorm
 
 
 def run_linear(
@@ -54,8 +54,9 @@ def run_embedding(
     Returns:
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
-
-    raise NotImplementedError
+    my_layer = Embedding(vocab_size, d_model)
+    my_layer.load_state_dict({"W": weights})
+    return my_layer.forward(token_ids)
 
 
 def run_swiglu(
@@ -382,7 +383,9 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    raise NotImplementedError
+    my_layer = RMSNorm(d_model, eps)
+    my_layer.load_state_dict({"W": weights})
+    return my_layer.forward(in_features)
 
 
 def run_silu(in_features: Float[Tensor, " ..."]) -> Float[Tensor, " ..."]:
