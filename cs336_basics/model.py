@@ -92,4 +92,3 @@ class RotaryPositionalEmbedding(nn.Module):
         # 要把rotated_even和rotated_odd交错堆叠起来
         res = torch.stack([rotated_even, rotated_odd], dim=-1)
         return einops.rearrange(res, "... half two -> ... (half two)")
-    
