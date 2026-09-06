@@ -3,6 +3,7 @@ import torch.nn as nn
 import einops
 import numpy as np
 from cs336_basics.utils import scaled_dot_product_attn
+from jaxtyping import Int
 
 class Linear(nn.Module):
     def __init__(self, in_features: int , out_features: int , device: torch.device | None=None, dtype: torch.dtype | None=None):
@@ -139,3 +140,20 @@ class TransformerBlock(nn.Module):
         seq_len = x.shape[-2]
         y = x + self.attn.forward(self.ln1.forward(x), torch.arange(seq_len, device=self.device)) 
         return y + self.ffn.forward(self.ln2(y))
+
+class TransformerLM(nn.Module):
+    def __init__(self, num_layers: int, vocab_size:int, d_model: int, num_heads: int, d_ff: int, theta: float,
+                 max_seq_len: int, eps: float = 1e-5, device: torch.device | None = None,
+                 dtype: torch.dtype | None = None):
+        super().__init__()
+        self.token_embeddings = Embedding(vocab_size, d_model, device, dtype)
+        self.layers = nn.ModuleList([TransformerBlock(d_model, num_heads, d_ff, theta, max_seq_len, eps, device, dtype)
+                                     for _ in range(num_layers)])
+        self.ln_final = RMSNorm(d_model, eps, device, dtype)
+        self.lm_head = Linear(d_model, vocab_size, device, dtype)
+
+    def forward(self, token_ids: Int[torch.Tensor, "..."]) -> torch.Tensor:
+        res = self.token_embeddings.forward(token_ids)
+        for block in self.layers:
+            res = block.forward(res)
+        return self.lm_head.forward(self.ln_final.forward(res))
