@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import einops
 import numpy as np
+from cs336_basics.utils import scaled_dot_product_attn
 
 class Linear(nn.Module):
     def __init__(self, in_features: int , out_features: int , device: torch.device | None=None, dtype: torch.dtype | None=None):
@@ -92,3 +93,58 @@ class RotaryPositionalEmbedding(nn.Module):
         # 要把rotated_even和rotated_odd交错堆叠起来
         res = torch.stack([rotated_even, rotated_odd], dim=-1)
         return einops.rearrange(res, "... half two -> ... (half two)")
+
+class MultiheadSelfAttention(nn.Module):
+    def __init__(self, d_model: int, num_heads: int, theta: float = None, max_seq_len: int = None,
+                 device: torch.device | None = None, dtype: torch.dtype | None = None):
+        super().__init__()
+        self.d_model = d_model
+        self.num_heads = num_heads
+        self.d_k = d_model // num_heads # dimension for each attn head
+
+        # init Wq, Wk, Wv of shape (d_k * num_heads, d_model)
+        output_dim = self.d_k * self.num_heads
+        std = np.sqrt(2.0 / (output_dim + d_model))
+        Wq = torch.empty((output_dim, self.d_model))
+        nn.init.trunc_normal_(Wq, mean=0.0, std=std, a=-3.0*std, b=3.0*std)
+        self.Wq = nn.Parameter(Wq).to(device=device, dtype=dtype)
+
+        Wk = torch.empty((output_dim, self.d_model))
+        nn.init.trunc_normal_(Wk, mean=0.0, std=std, a=-3.0*std, b=3.0*std)
+        self.Wk = nn.Parameter(Wk).to(device=device, dtype=dtype)
+
+        Wv = torch.empty((output_dim, self.d_model))
+        nn.init.trunc_normal_(Wv, mean=0.0, std=std, a=-3.0*std, b=3.0*std)
+        self.Wv = nn.Parameter(Wv).to(device=device, dtype=dtype)
+
+        Wo = torch.empty((self.d_model, output_dim))
+        nn.init.trunc_normal_(Wo, mean=0.0, std=std, a=-3.0*std, b=3.0*std)
+        self.Wo = nn.Parameter(Wo).to(device=device, dtype=dtype)
+
+        if theta is not None and max_seq_len is not None:
+            self.rope = RotaryPositionalEmbedding(theta, self.d_k, max_seq_len)
+        else:
+            self.rope = None
+
+    def forward(self, x: torch.Tensor, token_positions: torch.Tensor | None = None) -> torch.Tensor:
+        Q = einops.einsum(self.Wq, x, "out_dim d_model, ... seq_len d_model -> ... seq_len out_dim")
+        Q = einops.rearrange(Q, "... seq_len (h d_k) -> ... h seq_len d_k", h=self.num_heads)
+
+        K = einops.einsum(self.Wk, x, "out_dim d_model, ... seq_len d_model -> ... seq_len out_dim")
+        K = einops.rearrange(K, "... seq_len (h d_k) -> ... h seq_len d_k", h=self.num_heads)
+
+        V = einops.einsum(self.Wv, x, "out_dim d_model, ... seq_len d_model -> ... seq_len out_dim")
+        V = einops.rearrange(V, "... seq_len (h d_k) -> ... h seq_len d_k", h=self.num_heads)
+
+        seq_len = Q.shape[-2]
+        if self.rope and token_positions is not None:
+            Q = self.rope.forward(Q, token_positions)
+            K = self.rope.forward(K, token_positions)
+        # mask[i,j] = True means qi does attend to kj
+        mask = ~torch.triu(torch.ones(seq_len, seq_len, dtype=torch.bool), diagonal=1)
+        # align mask's dim with Q/K/V for indexing purpose
+        mask = mask.unsqueeze(0).unsqueeze(0)
+        mask = mask.expand(Q.shape[:-2] + (seq_len, seq_len))
+        heads = scaled_dot_product_attn(Q, K, V, mask)
+        heads = einops.rearrange(heads, "... h seq_len d_k -> ... seq_len (h d_k)")
+        return einops.einsum(self.Wo, heads, "d_model output_dim, ... seq_len output_dim -> ... seq_len d_model")
