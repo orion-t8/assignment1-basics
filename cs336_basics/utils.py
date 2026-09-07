@@ -20,3 +20,11 @@ def cross_entropy(logits: Float[torch.Tensor, "batch vocab_size"], targets: Int[
     logsumexp = torch.log(torch.sum(torch.exp(subtracted), dim=-1))
     selected = torch.gather(subtracted, dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)
     return torch.mean(logsumexp - selected)
+
+def model_size(vocab_size: int, d_model: int, num_heads: int, d_ff: int, num_layers: int) -> int:
+    embedding = vocab_size * d_model
+    d_k = d_model // num_heads
+    transformer_block = num_layers * (2 * d_model + 4 * num_heads * d_k * d_model + 3 * d_model * d_ff)
+    ln_final = d_model
+    lm_head = d_model * vocab_size
+    return embedding + transformer_block + ln_final + lm_head
