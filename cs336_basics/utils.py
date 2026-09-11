@@ -2,6 +2,7 @@ import torch
 import einops
 import numpy as np
 from jaxtyping import Float, Int
+from collections.abc import Iterable
 
 def softmax(x: torch.Tensor, i: int) -> torch.Tensor:
     m = torch.max(x, dim=i, keepdim=True).values
@@ -28,3 +29,21 @@ def model_size(vocab_size: int, d_model: int, num_heads: int, d_ff: int, num_lay
     ln_final = d_model
     lm_head = d_model * vocab_size
     return embedding + transformer_block + ln_final + lm_head
+
+def learning_rate_schedule(t: int, alpha_max: float, alpha_min: float, T_w: int, T_c: int) -> float:
+    if t < T_w:
+        return t / T_w * alpha_max
+    if t <= T_c:
+        return alpha_min + 0.5 * (1 + np.cos((t - T_w)  / (T_c - T_w) * np.pi)) * (alpha_max - alpha_min)
+    return alpha_min
+
+def gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
+    params_with_grad = list([p for p in parameters if p.grad is not None])
+    sqrd_sum = 0
+    for p in params_with_grad:
+        sqrd_sum += torch.sum(p.grad.data ** 2)
+    G = torch.sqrt(sqrd_sum)
+    if G > max_l2_norm:
+        factor = max_l2_norm / (G + 1e-6)
+        for p in params_with_grad:
+            p.grad.data *= factor
