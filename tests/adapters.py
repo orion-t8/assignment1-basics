@@ -26,7 +26,8 @@ from cs336_basics.utils import (
     scaled_dot_product_attn,
     cross_entropy,
     learning_rate_schedule,
-    gradient_clipping
+    gradient_clipping,
+    data_loading
 )
 from cs336_basics.optimizer import AdamW
 
@@ -458,7 +459,7 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    return data_loading(dataset, batch_size, context_length, device)
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:

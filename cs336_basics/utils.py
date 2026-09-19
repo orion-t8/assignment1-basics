@@ -47,3 +47,12 @@ def gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: flo
         factor = max_l2_norm / (G + 1e-6)
         for p in params_with_grad:
             p.grad.data *= factor
+
+def data_loading(x: np.ndarray, batch_size: int, context_length: int, device: str) -> tuple[torch.Tensor, torch.Tensor]:
+    tensor_data = torch.from_numpy(x)
+    max_idx = len(x) - (context_length + 1) # need to sample length = context_length + 1
+    start_indices = torch.randint(0, max_idx+1, (batch_size, 1)) # shape = (B, 1)
+    offsets = torch.arange(context_length + 1) # shape = (m,)
+    idx_grid = start_indices + offsets # shape = (B, m) by broadcasting
+    sampled_data = tensor_data[idx_grid].to(device)
+    return sampled_data[:, :-1], sampled_data[:, 1:]
