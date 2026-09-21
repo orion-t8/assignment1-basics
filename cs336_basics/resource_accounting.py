@@ -1,5 +1,12 @@
-from cs336_basics.utils import model_size
 from cs336_basics.model import TransformerLM
+
+def model_size(vocab_size: int, d_model: int, num_heads: int, d_ff: int, num_layers: int) -> int:
+    embedding = vocab_size * d_model
+    d_k = d_model // num_heads
+    transformer_block = num_layers * (2 * d_model + 4 * num_heads * d_k * d_model + 3 * d_model * d_ff)
+    ln_final = d_model
+    lm_head = d_model * vocab_size
+    return embedding + transformer_block + ln_final + lm_head
 
 def compute_adamw_peak_memory(context_len, num_heads, num_layers, d_model, vocab_size, d_ff, batch_size):
     # assume all linear transformations' resultants are kept for backprop

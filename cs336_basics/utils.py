@@ -3,6 +3,8 @@ import einops
 import numpy as np
 from jaxtyping import Float, Int
 from collections.abc import Iterable
+import os
+import typing
 
 def softmax(x: torch.Tensor, i: int) -> torch.Tensor:
     m = torch.max(x, dim=i, keepdim=True).values
@@ -21,14 +23,6 @@ def cross_entropy(logits: Float[torch.Tensor, "batch vocab_size"], targets: Int[
     logsumexp = torch.log(torch.sum(torch.exp(subtracted), dim=-1))
     selected = torch.gather(subtracted, dim=-1, index=targets.unsqueeze(-1)).squeeze(-1)
     return torch.mean(logsumexp - selected)
-
-def model_size(vocab_size: int, d_model: int, num_heads: int, d_ff: int, num_layers: int) -> int:
-    embedding = vocab_size * d_model
-    d_k = d_model // num_heads
-    transformer_block = num_layers * (2 * d_model + 4 * num_heads * d_k * d_model + 3 * d_model * d_ff)
-    ln_final = d_model
-    lm_head = d_model * vocab_size
-    return embedding + transformer_block + ln_final + lm_head
 
 def learning_rate_schedule(t: int, alpha_max: float, alpha_min: float, T_w: int, T_c: int) -> float:
     if t < T_w:
@@ -56,3 +50,16 @@ def data_loading(x: np.ndarray, batch_size: int, context_length: int, device: st
     idx_grid = start_indices + offsets # shape = (B, m) by broadcasting
     sampled_data = tensor_data[idx_grid].to(device)
     return sampled_data[:, :-1], sampled_data[:, 1:]
+
+def save_checkpoint(model: torch.nn.Module, optimizer: torch.optim.Optimizer, iteration: int, out: str | os.PathLike | typing.BinaryIO | typing.IO[bytes]):
+    obj = dict()
+    obj['model'] = model.state_dict()
+    obj['optimizer'] = optimizer.state_dict()
+    obj['iteration'] = iteration
+    torch.save(obj, out)
+
+def load_checkpoint(src: str | os.PathLike | typing.BinaryIO | typing.IO[bytes], model: torch.nn.Module, optimizer: torch.optim.Optimizer) -> int:
+    obj = torch.load(src)
+    model.load_state_dict(obj['model'])
+    optimizer.load_state_dict(obj['optimizer'])
+    return obj['iteration']
