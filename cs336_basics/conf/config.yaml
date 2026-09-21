@@ -1,0 +1,35 @@
+data:
+  train_path: data/train.npy
+  valid_path: data/valid.npy
+
+training:
+  batch_size: 32
+  max_tokens_processed: 327680000
+  eval_interval: 500
+  eval_iters: 20
+  save_interval: 1000
+  max_grad_norm: 1.0
+  device: cpu
+  seed: 42
+  ckpt_path: checkpoint/model.pt
+
+model:
+  vocab_size: 10000
+  context_length: 256
+  d_model: 512
+  d_ff: 1344
+  rope_theta: 10000
+  num_layers: 4
+  num_heads: 16
+
+optimizer:
+  weight_decay: 0.1
+  beta1: 0.9
+  beta2: 0.95
+  eps: 1e-8
+
+lr_scheduler:
+  max_learning_rate: 3e-4
+  min_learning_rate: 3e-5
+  warmup_iters: 1000
+  cosine_cycle_iters: 10000

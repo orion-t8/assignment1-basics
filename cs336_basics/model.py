@@ -58,7 +58,7 @@ class SwiGLU(nn.Module):
         return self.w2.forward(z)
 
 class RotaryPositionalEmbedding(nn.Module):
-    def __init__(self, theta: float, d_k: int, max_seq_len: int):
+    def __init__(self, theta: float, d_k: int, max_seq_len: int, device: torch.device | None = None):
         super().__init__()
         self.theta = theta
         self.d_k = d_k
@@ -69,7 +69,9 @@ class RotaryPositionalEmbedding(nn.Module):
         theta_ik = position / theta_tensor
         assert theta_ik.shape == (max_seq_len, d_k//2)
         self.register_buffer("cos_cached", torch.cos(theta_ik), persistent=False)
+        self.cos_cached.to(device)
         self.register_buffer("sin_cached", torch.sin(theta_ik), persistent=False)
+        self.sin_cached.to(device)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         # token_positions.shape = (batch, seq_length)
