@@ -4,24 +4,6 @@ import pickle
 
 from cs336_basics.pretokenization_example import merge_pair
 
-def merge_chunk(merge_rank: dict[tuple[bytes, bytes], int], text: str) -> tuple[bytes, ...]:
-    cur_bytes = tuple(map(lambda k: bytes([k]), list(text.encode('UTF-8'))))
-    invalid_rank = len(merge_rank)
-    # track the ordered list of pairs, find the pair that appears first in self.merges, merge the pair and update the list
-    while True:
-        min_rank = invalid_rank
-        min_rank_pair: tuple[bytes, bytes] | None = None
-        for i in range(len(cur_bytes) - 1):
-            pair = (cur_bytes[i], cur_bytes[i+1])
-            cur_rank = merge_rank.get(pair, invalid_rank)
-            if cur_rank < min_rank:
-                min_rank = cur_rank
-                min_rank_pair = pair
-        if min_rank == invalid_rank:
-            return cur_bytes
-        cur_bytes = merge_pair(min_rank_pair, cur_bytes)
-
-
 class Tokenizer:
     def __init__(self, vocab: dict[int, bytes],
                  merges: list[tuple[bytes, bytes]],
@@ -42,6 +24,9 @@ class Tokenizer:
             st_pattern = '|'.join(re.escape(st) for st in self.special_tokens)
             self.st_pattern = re.compile(f'({st_pattern})')
 
+        self.max_cache_pretoken_size = 10000
+        self.pretoken_cache: dict[str, tuple[int, ...]] = dict()
+
     @classmethod
     def from_file(cls, vocab_filepath: str, merges_filepath: str, special_tokens: list[str] | None=None):
         with open(vocab_filepath, "rb") as f:
@@ -50,11 +35,40 @@ class Tokenizer:
             merges = pickle.load(f)
         return cls(vocab, merges, special_tokens)
 
+    def merge_pretoken(self, text: str) -> tuple[bytes, ...]:
+        # try to match in cache, if found, re-insert to update key's position
+        res = self.pretoken_cache.pop(text, tuple())
+        if len(res) > 0:
+            self.pretoken_cache[text] = res
+            return res
+
+        # evict the oldest key if cache size exceeds max cache size
+        if len(self.pretoken_cache) == self.max_cache_pretoken_size:
+            oldest_key = next(iter(self.pretoken_cache))
+            self.pretoken_cache.pop(oldest_key)
+        encoded = text.encode("utf-8")
+        cur_bytes = tuple(encoded[i:i+1] for i in range(len(encoded)))
+        invalid_rank = len(self.merge_rank)
+        # track the ordered list of pairs, find the pair that appears first in self.merges, merge the pair and update the list
+        while True:
+            min_rank = invalid_rank
+            min_rank_pair: tuple[bytes, bytes] | None = None
+            for i in range(len(cur_bytes) - 1):
+                pair = (cur_bytes[i], cur_bytes[i+1])
+                cur_rank = self.merge_rank.get(pair, invalid_rank)
+                if cur_rank < min_rank:
+                    min_rank = cur_rank
+                    min_rank_pair = pair
+            if min_rank == invalid_rank:
+                self.pretoken_cache[text] = cur_bytes
+                return cur_bytes
+            cur_bytes = merge_pair(min_rank_pair, cur_bytes)
+
     def encode(self, text: str) -> list[int]:
         res: list[int] = []
         if not self.special_tokens:
             for match in re.finditer(self.pretokenize_pattern, text):
-                res += [self.bytes2ids[b] for b in merge_chunk(self.merge_rank, match.group())]
+                res += [self.bytes2ids[b] for b in self.merge_pretoken(match.group())]
             return res
 
         # split by special tokens
@@ -62,7 +76,7 @@ class Tokenizer:
         for i in range(len(parts)):
             if i % 2 == 0:
                 for match in re.finditer(self.pretokenize_pattern, parts[i]):
-                    res += [self.bytes2ids[b] for b in merge_chunk(self.merge_rank, match.group())]
+                    res += [self.bytes2ids[b] for b in self.merge_pretoken(match.group())]
             else:
                 res += [self.bytes2ids[self.st2bytes[parts[i]]]]
         return res

@@ -165,4 +165,5 @@ cython_debug/
 data/
 profile/
 profile.prof
-cs336_basics/outputs/
+outputs/
+checkpoint/

@@ -11,8 +11,8 @@ def tqdm_line_wrapper(file_obj, pbar):
 
 if __name__ == "__main__":
     special_tokens = ["<|endoftext|>"]
-    tokenizer = Tokenizer.from_file("output/tinystories/vocab_20260921_204713.pkl",
-                                    "output/tinystories/merges_20260921_204713.pkl",
+    tokenizer = Tokenizer.from_file("trained_tokenizer/tinystories/vocab_20260921_204713.pkl",
+                                    "trained_tokenizer/tinystories/merges_20260921_204713.pkl",
                                     special_tokens)
     train_path = "data/TinyStoriesV2-GPT4-train.txt"
     total_bytes = os.path.getsize(train_path)

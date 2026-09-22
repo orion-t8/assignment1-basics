@@ -101,7 +101,7 @@ class MultiheadSelfAttention(nn.Module):
         self.output_proj = Linear(output_dim, d_model, device, dtype)
 
         if theta is not None and max_seq_len is not None:
-            self.rope = RotaryPositionalEmbedding(theta, self.d_k, max_seq_len)
+            self.rope = RotaryPositionalEmbedding(theta, self.d_k, max_seq_len, device)
         else:
             self.rope = None
 

@@ -59,7 +59,8 @@ def compute_freq(text: str) -> Counter[tuple[bytes, ...]]:
     pattern = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     for match in re.finditer(pattern, text):
         # generate tuples e.g., 'hello' -> (b'h', b'e', b'l', b'l', b'o')
-        bytes_tuple = tuple(map(lambda k: bytes([k]), list(match.group().encode('UTF-8'))))
+        encoded = match.group().encode("utf-8")
+        bytes_tuple = tuple(encoded[i:i+1] for i in range(len(encoded)))
         freq.update([bytes_tuple])
     return freq
 
@@ -90,18 +91,18 @@ def count_adjacent_pairs_idx_version(pretoken_tokens: dict[int, tuple[bytes,...]
 
 def merge_pair(pair: tuple[bytes, bytes], token: tuple[bytes, ...]) -> tuple[bytes, ...]:
     i = 0
-    merged: tuple[bytes, ...] = tuple()
+    merged: list[bytes] = []
     while i < len(token) - 1:
         if token[i] == pair[0] and token[i+1] == pair[1]:
-            merged += (pair[0] + pair[1],)
+            merged.append(pair[0] + pair[1])
             i += 2
         else:
-            merged += (token[i],)
+            merged.append(token[i])
             i += 1
     assert i == len(token) - 1 or i == len(token)
     if i == len(token) - 1:
-        merged += (token[i], )
-    return merged
+        merged.append(token[i])
+    return tuple(merged)
 
 def merge(freq: Counter[tuple[bytes, ...]], pair: tuple[bytes, bytes]) -> Counter[tuple[bytes, ...]]:
     res: Counter[tuple[bytes, ...]] = Counter()

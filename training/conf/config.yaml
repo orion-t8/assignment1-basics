@@ -1,6 +1,6 @@
 data:
-  train_path: data/train.npy
-  valid_path: data/valid.npy
+  train_path: data/TinyStoriesV2-GPT4-train-tokenized.npy
+  valid_path: data/TinyStoriesV2-GPT4-valid-tokenized.npy
 
 training:
   batch_size: 32

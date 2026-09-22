@@ -4,7 +4,6 @@ from omegaconf import DictConfig
 import numpy as np
 import torch
 import random
-import datetime
 from cs336_basics.utils import data_loading, cross_entropy, learning_rate_schedule, gradient_clipping, save_checkpoint
 from cs336_basics.model import TransformerLM
 from cs336_basics.optimizer import AdamW
@@ -63,9 +62,11 @@ def training_loop(cfg: DictConfig) -> None:
             transformer_lm.train()
 
         if completed_steps % cfg.training.save_interval == 0:
-            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-            ckpt_name = f"{cfg.training.ckpt_path}/{current_time}.pt"
+            ckpt_name = f"{cfg.training.ckpt_path}/step_{completed_steps}.pt"
             save_checkpoint(transformer_lm, optimizer, completed_steps, to_absolute_path(ckpt_name))
+    if max_steps % cfg.training.save_interval != 0:
+        ckpt_name = f"{cfg.training.ckpt_path}/step_{max_steps}.pt"
+        save_checkpoint(transformer_lm, optimizer, max_steps, to_absolute_path(ckpt_name))
 
 if __name__ == "__main__":
     training_loop()
