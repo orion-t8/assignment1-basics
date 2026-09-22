@@ -20,7 +20,7 @@ if __name__ == "__main__":
         with open(train_path, "r", encoding="utf-8", newline="") as f:
             wrapped_iterator = tqdm_line_wrapper(f, pbar)
             token_ids_iter = tokenizer.encode_iterable(wrapped_iterator)
-            token_array = np.fromiter(token_ids_iter, dtype=np.int64)
+            token_array = np.fromiter(token_ids_iter, dtype=np.uint16)
             np.save("data/TinyStoriesV2-GPT4-train-tokenized.npy", token_array)
 
     valid_path = "data/TinyStoriesV2-GPT4-valid.txt"
@@ -29,5 +29,5 @@ if __name__ == "__main__":
         with open("data/TinyStoriesV2-GPT4-valid.txt", "r", encoding="utf-8", newline="") as f:
             wrapped_iterator = tqdm_line_wrapper(f, pbar)
             token_ids_iter = tokenizer.encode_iterable(wrapped_iterator)
-            token_array = np.fromiter(token_ids_iter, dtype=np.int64)
+            token_array = np.fromiter(token_ids_iter, dtype=np.uint16)
             np.save("data/TinyStoriesV2-GPT4-valid-tokenized.npy", token_array)

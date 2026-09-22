@@ -4,20 +4,22 @@ import pickle
 
 from cs336_basics.pretokenization_example import merge_pair
 
-def merge_chunk(merges: list[tuple[bytes, bytes]], text: str) -> tuple[bytes, ...]:
-    text_bytes = tuple(map(lambda k: bytes([k]), list(text.encode('UTF-8'))))
+def merge_chunk(merge_rank: dict[tuple[bytes, bytes], int], text: str) -> tuple[bytes, ...]:
+    cur_bytes = tuple(map(lambda k: bytes([k]), list(text.encode('UTF-8'))))
+    invalid_rank = len(merge_rank)
     # track the ordered list of pairs, find the pair that appears first in self.merges, merge the pair and update the list
     while True:
-        found = False
-        adjacnet_pairs = set(zip(text_bytes[:-1], text_bytes[1:]))
-        for pair in merges:
-            if pair in adjacnet_pairs:
-                found = True
-                text_bytes = merge_pair(pair, text_bytes)
-                break
-        if not found:
-            break
-    return text_bytes
+        min_rank = invalid_rank
+        min_rank_pair: tuple[bytes, bytes] | None = None
+        for i in range(len(cur_bytes) - 1):
+            pair = (cur_bytes[i], cur_bytes[i+1])
+            cur_rank = merge_rank.get(pair, invalid_rank)
+            if cur_rank < min_rank:
+                min_rank = cur_rank
+                min_rank_pair = pair
+        if min_rank == invalid_rank:
+            return cur_bytes
+        cur_bytes = merge_pair(min_rank_pair, cur_bytes)
 
 
 class Tokenizer:
@@ -26,7 +28,7 @@ class Tokenizer:
                  special_tokens: list[str] | None = None):
         self.vocab = vocab
         self.merges = merges
-        self.merge_rank = dict() # used in encoding, fast lookup
+        self.merge_rank: dict[tuple[bytes, bytes], int] = dict() # used in encoding, fast lookup
         for i in range(len(self.merges)):
             self.merge_rank[self.merges[i]] = i
         self.bytes2ids: dict[bytes, int] = dict()
@@ -52,7 +54,7 @@ class Tokenizer:
         res: list[int] = []
         if not self.special_tokens:
             for match in re.finditer(self.pretokenize_pattern, text):
-                res += [self.bytes2ids[b] for b in merge_chunk(self.merges, match.group())]
+                res += [self.bytes2ids[b] for b in merge_chunk(self.merge_rank, match.group())]
             return res
 
         # split by special tokens
@@ -60,7 +62,7 @@ class Tokenizer:
         for i in range(len(parts)):
             if i % 2 == 0:
                 for match in re.finditer(self.pretokenize_pattern, parts[i]):
-                    res += [self.bytes2ids[b] for b in merge_chunk(self.merges, match.group())]
+                    res += [self.bytes2ids[b] for b in merge_chunk(self.merge_rank, match.group())]
             else:
                 res += [self.bytes2ids[self.st2bytes[parts[i]]]]
         return res
