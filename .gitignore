@@ -163,7 +163,6 @@ cython_debug/
 *.zip
 .vscode/settings.json
 data/
-output/
 profile/
 profile.prof
 cs336_basics/outputs/

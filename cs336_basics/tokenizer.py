@@ -26,6 +26,9 @@ class Tokenizer:
                  special_tokens: list[str] | None = None):
         self.vocab = vocab
         self.merges = merges
+        self.merge_rank = dict() # used in encoding, fast lookup
+        for i in range(len(self.merges)):
+            self.merge_rank[self.merges[i]] = i
         self.bytes2ids: dict[bytes, int] = dict()
         for idx, b in vocab.items():
             self.bytes2ids[b] = idx

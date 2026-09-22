@@ -11,7 +11,7 @@ training:
   max_grad_norm: 1.0
   device: cpu
   seed: 42
-  ckpt_path: checkpoint/model.pt
+  ckpt_path: checkpoint
 
 model:
   vocab_size: 10000

@@ -4,6 +4,7 @@ from omegaconf import DictConfig
 import numpy as np
 import torch
 import random
+import datetime
 from cs336_basics.utils import data_loading, cross_entropy, learning_rate_schedule, gradient_clipping, save_checkpoint
 from cs336_basics.model import TransformerLM
 from cs336_basics.optimizer import AdamW
@@ -32,11 +33,13 @@ def training_loop(cfg: DictConfig) -> None:
     optimizer = AdamW(transformer_lm.parameters(), learning_rate_schedule(0, max_lr, min_lr, warmup_iters, cosine_cycle_iters),
                       cfg.optimizer.weight_decay, (cfg.optimizer.beta1, cfg.optimizer.beta2), cfg.optimizer.eps)
 
+    acc_training_loss = 0
     for t in range(max_steps):
         x, y = data_loading(train_data, batch_size, context_length, cfg.training.device)
         optimizer.zero_grad()
         logits = transformer_lm.forward(x)
         loss = cross_entropy(logits, y)
+        acc_training_loss += loss.item()
         loss.backward()
         gradient_clipping(transformer_lm.parameters(), cfg.training.max_grad_norm)
         lr = learning_rate_schedule(t, max_lr, min_lr, warmup_iters, cosine_cycle_iters)
@@ -54,11 +57,15 @@ def training_loop(cfg: DictConfig) -> None:
                     eval_logits = transformer_lm.forward(eval_x)
                     eval_loss += cross_entropy(eval_logits, eval_y).item()
             eval_loss /= cfg.training.eval_iters
-            print("After step %d, training loss: %f, validation loss: %f" % (t+1, loss.item(), eval_loss))
+            print("Step %d, avg training loss: %f, avg validation loss: %f" %
+                  (completed_steps, acc_training_loss / cfg.training.eval_interval, eval_loss))
+            acc_training_loss = 0.0
             transformer_lm.train()
 
         if completed_steps % cfg.training.save_interval == 0:
-            save_checkpoint(transformer_lm, optimizer, completed_steps, to_absolute_path(cfg.training.ckpt_path))
+            current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+            ckpt_name = f"{cfg.training.ckpt_path}/{current_time}.pt"
+            save_checkpoint(transformer_lm, optimizer, completed_steps, to_absolute_path(ckpt_name))
 
 if __name__ == "__main__":
     training_loop()
