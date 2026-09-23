@@ -37,7 +37,7 @@ def training_loop(cfg: DictConfig) -> None:
         project = cfg.logging.wandb_project,
         config = OmegaConf.to_container(cfg, resolve=True)
     )
-    
+    wandb.watch(transformer_lm, log="all", log_freq=cfg.training.eval_interval)
     training_loss = 0
     for t in range(max_steps):
         x, y = data_loading(train_data, batch_size, context_length, cfg.training.device)
