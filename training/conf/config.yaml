@@ -33,3 +33,6 @@ lr_scheduler:
   min_learning_rate: 3e-5
   warmup_iters: 1000
   cosine_cycle_iters: 10000
+
+logging:
+  wandb_project: tinystories-training
