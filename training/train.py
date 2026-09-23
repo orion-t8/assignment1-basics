@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import random
 import wandb
-import datetime
+from datetime import datetime
 from pathlib import Path
 from cs336_basics.utils import data_loading, cross_entropy, learning_rate_schedule, gradient_clipping, save_checkpoint
 from cs336_basics.model import TransformerLM
