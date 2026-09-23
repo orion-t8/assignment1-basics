@@ -54,7 +54,7 @@ def training_loop(cfg: DictConfig) -> None:
 
         completed_steps = t+1
         if completed_steps % cfg.training.eval_interval == 0:
-            training_loss /= cfg.training.eval_iters
+            training_loss /= cfg.training.eval_interval
             transformer_lm.eval()
             eval_loss = 0.0
             with torch.no_grad():

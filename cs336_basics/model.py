@@ -134,6 +134,7 @@ class TransformerBlock(nn.Module):
         self.attn = MultiheadSelfAttention(d_model, num_heads, theta, max_seq_len, device, dtype)
         self.ln2 = RMSNorm(d_model, eps, device, dtype)
         self.ffn = SwiGLU(d_model, d_ff, device, dtype)
+        self.device = device
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         seq_len = x.shape[-2]
