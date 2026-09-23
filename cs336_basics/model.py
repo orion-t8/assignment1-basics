@@ -9,9 +9,9 @@ class Linear(nn.Module):
     def __init__(self, in_features: int , out_features: int , device: torch.device | None=None, dtype: torch.dtype | None=None):
         super().__init__()
         std = np.sqrt(2.0 / (in_features+out_features))
-        weight = torch.empty((out_features, in_features))
+        weight = torch.empty((out_features, in_features), device=device, dtype=dtype)
         nn.init.trunc_normal_(weight, mean=0.0, std=std, a=-3.0*std, b=3.0*std)
-        self.weight = nn.Parameter(weight).to(device=device, dtype=dtype)
+        self.weight = nn.Parameter(weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return einops.einsum(self.weight, x, "out_features in_features, ... in_features -> ... out_features")
@@ -22,9 +22,9 @@ class Embedding(nn.Module):
         self.vocab_size = vocab_size
         self.d_model = d_model
         std = np.sqrt(2.0 / (vocab_size + d_model))
-        weight = torch.empty((vocab_size, d_model))
+        weight = torch.empty((vocab_size, d_model), device=device, dtype=dtype)
         nn.init.trunc_normal_(weight, mean=0.0, std=std, a=-3.0*std, b=3.0*std)
-        self.weight = nn.Parameter(weight).to(device=device, dtype=dtype)
+        self.weight = nn.Parameter(weight)
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         return self.weight[token_ids]
@@ -34,8 +34,8 @@ class RMSNorm(nn.Module):
         super().__init__()
         self.d_model = d_model
         self.eps = eps
-        weight = torch.ones(d_model)
-        self.weight = nn.Parameter(weight).to(device=device, dtype=dtype)
+        weight = torch.ones(d_model, device=device, dtype=dtype)
+        self.weight = nn.Parameter(weight)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         in_type = x.dtype
@@ -63,15 +63,13 @@ class RotaryPositionalEmbedding(nn.Module):
         self.theta = theta
         self.d_k = d_k
         self.max_seq_len = max_seq_len
-        position = torch.arange(max_seq_len).unsqueeze(-1)
-        theta_tensor = torch.tensor([theta**((2*k-2) / d_k) for k in range(1, d_k//2+1)])
+        position = torch.arange(max_seq_len, device=device).unsqueeze(-1)
+        theta_tensor = torch.tensor([theta**((2*k-2) / d_k) for k in range(1, d_k//2+1)], device=device)
         theta_tensor = einops.rearrange(theta_tensor, "d_k -> 1 d_k")
         theta_ik = position / theta_tensor
         assert theta_ik.shape == (max_seq_len, d_k//2)
         self.register_buffer("cos_cached", torch.cos(theta_ik), persistent=False)
-        self.cos_cached.to(device)
         self.register_buffer("sin_cached", torch.sin(theta_ik), persistent=False)
-        self.sin_cached.to(device)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         # token_positions.shape = (batch, seq_length)
@@ -136,7 +134,6 @@ class TransformerBlock(nn.Module):
         self.attn = MultiheadSelfAttention(d_model, num_heads, theta, max_seq_len, device, dtype)
         self.ln2 = RMSNorm(d_model, eps, device, dtype)
         self.ffn = SwiGLU(d_model, d_ff, device, dtype)
-        self.device = device
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         seq_len = x.shape[-2]
