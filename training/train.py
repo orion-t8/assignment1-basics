@@ -83,7 +83,7 @@ def training_loop(cfg: DictConfig) -> None:
             transformer_lm.train()
 
         if completed_steps % cfg.training.save_interval == 0:
-            ckpt_name = f"{cfg.training.ckpt_path}/step_{completed_steps}.pt"
+            ckpt_name = f"{ckpt_folder}/step_{completed_steps}.pt"
             save_checkpoint(transformer_lm, optimizer, completed_steps, to_absolute_path(ckpt_name))
 
     # if max_steps is not a multiple of save_interval, the nave the last model param
