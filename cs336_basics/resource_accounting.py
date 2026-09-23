@@ -43,3 +43,17 @@ if __name__ == "__main__":
     flops = 400000 * 1024 * 3 * compute_forward_pass_flop(context_len, num_heads, num_layers, d_model, vocab_size, d_ff) * 1e-12
     print("With batch size = 1024, 400K steps of forward pass + backward pass results in %f TFLOPs, requiring %f days of training." %
           (flops, flops / (495 * 0.5) / 3600 / 24))
+
+    vocab_size = 10000
+    context_len = 256
+    num_layers = 4
+    d_model = 512
+    num_heads = 16
+    d_ff = 1344
+    batch_size = 32
+    num_steps = 40000
+    flops = num_steps * batch_size * 3 * compute_forward_pass_flop(context_len, num_heads, num_layers, d_model, vocab_size, d_ff) * 1e-12
+    compute_RTX4090D = 59 # unit = TFLOPS
+    MFU = 0.5
+    print("With batch size = %d, %d steps of forward pass + backward pass results in %f TFLOPs, requiring %f hours of training." %
+          (batch_size, num_steps, flops, flops / (compute_RTX4090D * MFU) / 3600))

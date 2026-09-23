@@ -5,6 +5,8 @@ import numpy as np
 import torch
 import random
 import wandb
+import datetime
+from pathlib import Path
 from cs336_basics.utils import data_loading, cross_entropy, learning_rate_schedule, gradient_clipping, save_checkpoint
 from cs336_basics.model import TransformerLM
 from cs336_basics.optimizer import AdamW
@@ -32,6 +34,11 @@ def training_loop(cfg: DictConfig) -> None:
 
     optimizer = AdamW(transformer_lm.parameters(), learning_rate_schedule(0, max_lr, min_lr, warmup_iters, cosine_cycle_iters),
                       cfg.optimizer.weight_decay, (cfg.optimizer.beta1, cfg.optimizer.beta2), cfg.optimizer.eps)
+
+    # create ckpt folder based on current time
+    current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ckpt_folder = f"{cfg.training.ckpt_path}/{current_time}"
+    Path(ckpt_folder).mkdir(parents=True, exist_ok=True)
 
     wandb.init(
         project = cfg.logging.wandb_project,
@@ -81,7 +88,7 @@ def training_loop(cfg: DictConfig) -> None:
 
     # if max_steps is not a multiple of save_interval, the nave the last model param
     if max_steps % cfg.training.save_interval != 0:
-        ckpt_name = f"{cfg.training.ckpt_path}/step_{max_steps}.pt"
+        ckpt_name = f"{ckpt_folder}/step_{max_steps}.pt"
         save_checkpoint(transformer_lm, optimizer, max_steps, to_absolute_path(ckpt_name))
     wandb.finish()
 
