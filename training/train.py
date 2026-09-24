@@ -46,6 +46,7 @@ def training_loop(cfg: DictConfig) -> None:
     )
     wandb.watch(transformer_lm, log="all", log_freq=cfg.training.eval_interval)
     training_loss = 0
+    completed_steps = 0
     for t in range(max_steps):
         x, y = data_loading(train_data, batch_size, context_length, cfg.training.device)
         optimizer.zero_grad()
@@ -63,20 +64,20 @@ def training_loop(cfg: DictConfig) -> None:
         if completed_steps % cfg.training.eval_interval == 0:
             training_loss /= cfg.training.eval_interval
             transformer_lm.eval()
-            eval_loss = 0.0
+            val_loss = 0.0
             with torch.no_grad():
                 for _ in range(cfg.training.eval_iters):
                     eval_x, eval_y = data_loading(valid_data, batch_size, context_length, cfg.training.device)
                     eval_logits = transformer_lm.forward(eval_x)
-                    eval_loss += cross_entropy(eval_logits, eval_y).item()
-            eval_loss /= cfg.training.eval_iters
+                    val_loss += cross_entropy(eval_logits, eval_y).item()
+            val_loss /= cfg.training.eval_iters
             print("Step %d/%d, avg training loss: %f, avg validation loss: %f" %
-                  (completed_steps, max_steps, training_loss, eval_loss))
+                  (completed_steps, max_steps, training_loss, val_loss))
             metrics = {
                 "train/loss": training_loss,
                 "train/lr": lr,
                 "train/tokens_processed": completed_steps * batch_size * context_length,
-                "val/loss": eval_loss,
+                "val/loss": val_loss,
             }
             wandb.log(metrics, step=completed_steps)
             training_loss = 0.0
@@ -86,8 +87,12 @@ def training_loop(cfg: DictConfig) -> None:
             ckpt_name = f"{ckpt_folder}/step_{completed_steps}.pt"
             save_checkpoint(transformer_lm, optimizer, completed_steps, to_absolute_path(ckpt_name))
 
+        if val_loss < cfg.validation.val_loss_threshold:
+            print("Early stop, current val_loss = %f" % val_loss)
+            break
+
     # if max_steps is not a multiple of save_interval, the nave the last model param
-    if max_steps % cfg.training.save_interval != 0:
+    if completed_steps % cfg.training.save_interval != 0:
         ckpt_name = f"{ckpt_folder}/step_{max_steps}.pt"
         save_checkpoint(transformer_lm, optimizer, max_steps, to_absolute_path(ckpt_name))
     wandb.finish()
