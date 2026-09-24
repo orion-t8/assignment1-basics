@@ -167,3 +167,4 @@ profile/
 profile.prof
 outputs/
 checkpoint/
+wandb/

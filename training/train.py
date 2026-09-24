@@ -42,6 +42,7 @@ def training_loop(cfg: DictConfig) -> None:
 
     wandb.init(
         project = cfg.logging.wandb_project,
+        name = f"max_lr_{max_lr}",
         config = OmegaConf.to_container(cfg, resolve=True)
     )
     wandb.watch(transformer_lm, log="all", log_freq=cfg.training.eval_interval)
