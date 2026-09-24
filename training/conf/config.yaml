@@ -3,7 +3,7 @@ data:
   valid_path: data/TinyStoriesV2-GPT4-valid-tokenized.npy
 
 validation:
-  val_loss_threshold: 2.0
+  val_loss_threshold: 1.8
 
 training:
   batch_size: 32
@@ -15,6 +15,8 @@ training:
   device: cuda
   seed: 42
   ckpt_path: checkpoint
+  save_ckpt: False
+  max_steps: 10000
 
 model:
   vocab_size: 10000
@@ -32,8 +34,8 @@ optimizer:
   eps: 1e-8
 
 lr_scheduler:
-  max_learning_rate: 3e-4
-  min_learning_rate: 3e-5
+  max_learning_rate: 3e-3
+  min_learning_rate: 3e-4
   warmup_iters: 1000
   cosine_cycle_iters: 40000
 

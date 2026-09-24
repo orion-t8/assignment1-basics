@@ -23,32 +23,38 @@ def training_loop(cfg: DictConfig) -> None:
     valid_data = np.load(to_absolute_path(cfg.data.valid_path), mmap_mode='r')
     batch_size = cfg.training.batch_size
     context_length = cfg.model.context_length
-    max_steps = cfg.training.max_tokens_processed // (cfg.training.batch_size * cfg.model.context_length)
+    num_steps = cfg.training.max_tokens_processed // (cfg.training.batch_size * cfg.model.context_length)
+    num_steps = num_steps if num_steps < cfg.training.max_steps else cfg.training.max_steps
 
     transformer_lm = TransformerLM(cfg.model.num_layers, cfg.model.vocab_size, cfg.model.d_model, cfg.model.num_heads,
                         cfg.model.d_ff, cfg.model.rope_theta, cfg.model.context_length, 1e-5, cfg.training.device)
     max_lr = cfg.lr_scheduler.max_learning_rate
     min_lr = cfg.lr_scheduler.min_learning_rate
     warmup_iters = cfg.lr_scheduler.warmup_iters
-    cosine_cycle_iters = cfg.lr_scheduler.cosine_cycle_iters
+    cosine_cycle_iters = cfg.lr_scheduler.cosine_cycle_iters = num_steps
 
     optimizer = AdamW(transformer_lm.parameters(), learning_rate_schedule(0, max_lr, min_lr, warmup_iters, cosine_cycle_iters),
                       cfg.optimizer.weight_decay, (cfg.optimizer.beta1, cfg.optimizer.beta2), cfg.optimizer.eps)
 
+    # create suffix for experiment
+    experiment_suffix = f"lr_{max_lr}_batchsize_{batch_size}"
+
     # create ckpt folder based on current time
     current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-    ckpt_folder = f"{cfg.training.ckpt_path}/{current_time}"
-    Path(ckpt_folder).mkdir(parents=True, exist_ok=True)
+    ckpt_folder = f"{cfg.training.ckpt_path}/{current_time}_{experiment_suffix}"
+    if cfg.training.save_ckpt:
+        Path(ckpt_folder).mkdir(parents=True, exist_ok=True)
 
     wandb.init(
         project = cfg.logging.wandb_project,
-        name = f"max_lr_{max_lr}",
+        name = experiment_suffix,
         config = OmegaConf.to_container(cfg, resolve=True)
     )
     wandb.watch(transformer_lm, log="all", log_freq=cfg.training.eval_interval)
     training_loss = 0
+    is_early_stop = False
     completed_steps = 0
-    for t in range(max_steps):
+    for t in range(num_steps):
         x, y = data_loading(train_data, batch_size, context_length, cfg.training.device)
         optimizer.zero_grad()
         logits = transformer_lm.forward(x)
@@ -73,7 +79,7 @@ def training_loop(cfg: DictConfig) -> None:
                     val_loss += cross_entropy(eval_logits, eval_y).item()
             val_loss /= cfg.training.eval_iters
             print("Step %d/%d, avg training loss: %f, avg validation loss: %f" %
-                  (completed_steps, max_steps, training_loss, val_loss))
+                  (completed_steps, num_steps, training_loss, val_loss))
             metrics = {
                 "train/loss": training_loss,
                 "train/lr": lr,
@@ -83,19 +89,19 @@ def training_loop(cfg: DictConfig) -> None:
             wandb.log(metrics, step=completed_steps)
             training_loss = 0.0
             transformer_lm.train()
+            if val_loss < cfg.validation.val_loss_threshold:
+                print("Early stop, current val_loss = %f" % val_loss)
+                is_early_stop = True
+                break
 
-        if completed_steps % cfg.training.save_interval == 0:
+        if cfg.training.save_ckpt and completed_steps % cfg.training.save_interval == 0:
             ckpt_name = f"{ckpt_folder}/step_{completed_steps}.pt"
             save_checkpoint(transformer_lm, optimizer, completed_steps, to_absolute_path(ckpt_name))
 
-        if val_loss < cfg.validation.val_loss_threshold:
-            print("Early stop, current val_loss = %f" % val_loss)
-            break
-
-    # if max_steps is not a multiple of save_interval, the nave the last model param
-    if completed_steps % cfg.training.save_interval != 0:
-        ckpt_name = f"{ckpt_folder}/step_{max_steps}.pt"
-        save_checkpoint(transformer_lm, optimizer, max_steps, to_absolute_path(ckpt_name))
+    # if num_steps is not a multiple of save_interval, the nave the last model param
+    if cfg.training.save_ckpt and (is_early_stop or completed_steps % cfg.training.save_interval) != 0:
+        ckpt_name = f"{ckpt_folder}/step_{completed_steps}.pt"
+        save_checkpoint(transformer_lm, optimizer, completed_steps, to_absolute_path(ckpt_name))
     wandb.finish()
 
 if __name__ == "__main__":
