@@ -82,7 +82,7 @@ def main(cfg: DictConfig):
     device = torch.device(cfg.training.device)
     model = TransformerLM(cfg.model.num_layers, cfg.model.vocab_size, cfg.model.d_model, cfg.model.num_heads,
                           cfg.model.d_ff, cfg.model.rope_theta, cfg.model.context_length, device=cfg.training.device)
-    load_checkpoint(cfg.model.ckpt_path, model)    
+    load_checkpoint(to_absolute_path(cfg.inference.ckpt_file), model)    
     eot_id = tokenizer.encode(eot)[0]
     model.eval()
     with torch.inference_mode():
