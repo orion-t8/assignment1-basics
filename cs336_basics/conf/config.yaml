@@ -10,7 +10,7 @@ inference:
   temperature: 0.7
   top_p: 0.5
   max_tokens: 256
-  ckpt_file: checkpoint/best.pt
+  ckpt_file: checkpoint/full_run/best.pt
 
 training:
   batch_size: 32

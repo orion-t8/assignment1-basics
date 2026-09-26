@@ -51,7 +51,7 @@ def batch_decode(input_ids: Int[torch.Tensor, "batch_size sequence_length"],
     # only consider EOT after the input token positions
     id_mask = torch.arange(generated_ids.shape[-1], device=device) >= input_ids.shape[-1] # 1d tensor
     value_mask = generated_ids == eot_id # shape "batch_size sequence_length"
-    first_occurrence = torch.argmax(id_mask&value_mask, dim=-1)
+    first_occurrence = torch.argmax((id_mask&value_mask).int(), dim=-1)
     # for those that do not contain EOT, first_occurrence should be generated_ids.shape[-1]
     first_occurrence[~is_eot_generated] = generated_ids.shape[-1]
     return [tokenizer.decode(generated_ids[i, :first_occurrence[i]].cpu().tolist()) for i in range(len(generated_ids))]
@@ -108,7 +108,7 @@ def main(cfg: DictConfig):
                                                                      eot_id)
                 responses = batch_decode(input_ids, output_ids, tokenizer, eot_id, device, is_eot_generated)
                 # 4. Print results
-                print(f"Model ❯ {responses}")
+                print(f"Model ❯ {responses[0]}")
 
         except KeyboardInterrupt:
             # Handles physical Ctrl+C press cleanly without crashing out with an ugly traceback
