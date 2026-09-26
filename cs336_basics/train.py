@@ -89,7 +89,7 @@ def training_loop(cfg: DictConfig) -> None:
             wandb.log(metrics, step=completed_steps)
             training_loss = 0.0
             transformer_lm.train()
-            if val_loss < cfg.validation.val_loss_threshold:
+            if val_loss < cfg.training.val_loss_threshold:
                 print("Early stop, current val_loss = %f" % val_loss)
                 is_early_stop = True
                 break

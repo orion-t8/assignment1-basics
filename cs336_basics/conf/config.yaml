@@ -2,8 +2,14 @@ data:
   train_path: data/TinyStoriesV2-GPT4-train-tokenized.npy
   valid_path: data/TinyStoriesV2-GPT4-valid-tokenized.npy
 
-validation:
-  val_loss_threshold: 1.8
+tokenizer:
+  vocab_path: trained_tokenizer/tinystories/vocab_20260921_204713.pkl
+  merges_path: trained_tokenizer/tinystories/merges_20260921_204713.pkl
+
+inference:
+  temperature: 0.7
+  top_p: 0.5
+  max_tokens: 256
 
 training:
   batch_size: 32
@@ -17,6 +23,7 @@ training:
   ckpt_path: checkpoint
   save_ckpt: False
   max_steps: 10000
+  val_loss_threshold: 1.8
 
 model:
   vocab_size: 10000
