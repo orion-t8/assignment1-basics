@@ -2,6 +2,7 @@ import hydra
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
 import numpy as np
+import math
 import torch
 import random
 import wandb
@@ -58,44 +59,42 @@ def training_loop(cfg: DictConfig) -> None:
         x, y = data_loading(train_data, batch_size, context_length, cfg.training.device)
         optimizer.zero_grad()
         logits = transformer_lm.forward(x)
-        logits_max = logits.max().item()
 
         loss = cross_entropy(logits, y)
         training_loss += loss.item()
         loss.backward()
 
-        grad_norm = 0.0
-        for p in transformer_lm.parameters():
-            if p.grad is not None:
-                grad_norm += torch.sum(p.grad.data ** 2).item()
-        grad_norm = np.sqrt(grad_norm)
-        
         gradient_clipping(transformer_lm.parameters(), cfg.training.max_grad_norm)
         lr = learning_rate_schedule(t, max_lr, min_lr, warmup_iters, cosine_cycle_iters)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         optimizer.step()
 
-        param_norm = 0.0
-        for p in transformer_lm.parameters():
-            if p.requires_grad:
-                param_norm += torch.sum(p.detach() ** 2).item()
-        param_norm = np.sqrt(param_norm)
-
         completed_steps = t+1
-        metrics = {
-            "train/loss": loss.item(),
-            "train/logits_max": logits_max,
-            "train/grad_norm": grad_norm,
-            "train/param_norm": param_norm,
-            "train/learning_rate": lr
-        }
-        wandb.log(metrics, step=completed_steps)
-        print("Step %d/%d, training loss: %f, logits_max: %f, grad_norm: %f, param_norm: %f, learning_rate: %f" %
-              (completed_steps, num_steps, loss.item(), logits_max, grad_norm, param_norm, lr))
-
-        if math.isnan(loss.item()) or math.isnan(logits_max) or math.isnan(grad_norm) or math.isnan(param_norm):
-            break
+        if cfg.training.debug:
+            logits_max = logits.max().item()
+            grad_norm = 0.0
+            for p in transformer_lm.parameters():
+                if p.grad is not None:
+                    grad_norm += torch.sum(p.grad.data ** 2).item()
+            grad_norm = np.sqrt(grad_norm)
+            param_norm = 0.0
+            for p in transformer_lm.parameters():
+                if p.requires_grad:
+                    param_norm += torch.sum(p.detach() ** 2).item()
+            param_norm = np.sqrt(param_norm)
+            metrics = {
+                "train/loss": loss.item(),
+                "train/logits_max": logits_max,
+                "train/grad_norm": grad_norm,
+                "train/param_norm": param_norm,
+                "train/learning_rate": lr
+            }
+            wandb.log(metrics, step=completed_steps)
+            print("Step %d/%d, training loss: %f, logits_max: %f, grad_norm: %f, param_norm: %f, learning_rate: %f" %
+                  (completed_steps, num_steps, loss.item(), logits_max, grad_norm, param_norm, lr))
+            if math.isnan(loss.item()) or math.isnan(logits_max) or math.isnan(grad_norm) or math.isnan(param_norm):
+                break
 
         if cfg.training.need_eval and completed_steps % cfg.training.eval_interval == 0:
             training_loss /= cfg.training.eval_interval

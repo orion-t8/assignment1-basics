@@ -15,7 +15,7 @@ inference:
 training:
   batch_size: 32
   max_tokens_processed: 327680000
-  need_eval: False
+  need_eval: True
   eval_interval: 500
   eval_iters: 20
   save_interval: 1000
@@ -26,6 +26,7 @@ training:
   save_ckpt: False
   max_steps: 10000
   val_loss_threshold: 1.8
+  debug: False
 
 model:
   vocab_size: 10000
@@ -43,8 +44,8 @@ optimizer:
   eps: 1e-8
 
 lr_scheduler:
-  max_learning_rate: 3e-4
-  min_learning_rate: 3e-5
+  max_learning_rate: 3e-3
+  min_learning_rate: 3e-4
   warmup_iters: 1000
   cosine_cycle_iters: 40000
 
