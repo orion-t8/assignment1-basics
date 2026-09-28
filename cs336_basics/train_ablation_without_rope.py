@@ -49,7 +49,7 @@ def training_loop(cfg: DictConfig) -> None:
 
     wandb.init(
         project = cfg.logging.wandb_project,
-        name = "Ablation study: change to postnorm",
+        name = "Ablation study: No RoPE",
         config = OmegaConf.to_container(cfg, resolve=True)
     )
     wandb.watch(transformer_lm, log="all", log_freq=cfg.training.eval_interval)
