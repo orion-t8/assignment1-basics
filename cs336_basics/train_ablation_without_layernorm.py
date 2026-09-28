@@ -58,14 +58,37 @@ def training_loop(cfg: DictConfig) -> None:
         x, y = data_loading(train_data, batch_size, context_length, cfg.training.device)
         optimizer.zero_grad()
         logits = transformer_lm.forward(x)
+        logits_max = logits.max().item()
+
         loss = cross_entropy(logits, y)
         training_loss += loss.item()
         loss.backward()
+
+        grad_norm = 0.0
+        for p in transformer_lm.parameters():
+            if p.grad is not None:
+                grad_norm += torch.sum(p.grad.data ** 2).item()
+        grad_norm = np.sqrt(grad_norm)
+        
         gradient_clipping(transformer_lm.parameters(), cfg.training.max_grad_norm)
         lr = learning_rate_schedule(t, max_lr, min_lr, warmup_iters, cosine_cycle_iters)
         for param_group in optimizer.param_groups:
             param_group['lr'] = lr
         optimizer.step()
+
+        param_norm = 0.0
+        for p in transformer_lm.parameters():
+            if p.requires_grad:
+                param_norm += torch.sum(p.detach() ** 2).item()
+        param_norm = np.sqrt(param_norm)
+        metrics = {
+            "train/loss": loss.item(),
+            "train/logits_max": logits_max,
+            "train/grad_norm": grad_norm,
+            "train/param_norm": param_norm,
+            "train/learning_rate": lr
+        }
+        wandb.log(metrics, step=t+1)
 
         completed_steps = t+1
         if completed_steps % cfg.training.eval_interval == 0:
