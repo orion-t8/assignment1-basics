@@ -1,6 +1,7 @@
 import hydra
 from hydra.utils import to_absolute_path
 from omegaconf import DictConfig, OmegaConf
+import math
 import numpy as np
 import torch
 import random
@@ -47,7 +48,7 @@ def training_loop(cfg: DictConfig) -> None:
 
     wandb.init(
         project = cfg.logging.wandb_project,
-        name = experiment_suffix,
+        name = "Ablation study: remove layernorm",
         config = OmegaConf.to_container(cfg, resolve=True)
     )
     wandb.watch(transformer_lm, log="all", log_freq=cfg.training.eval_interval)
@@ -81,6 +82,8 @@ def training_loop(cfg: DictConfig) -> None:
             if p.requires_grad:
                 param_norm += torch.sum(p.detach() ** 2).item()
         param_norm = np.sqrt(param_norm)
+
+        completed_steps = t+1
         metrics = {
             "train/loss": loss.item(),
             "train/logits_max": logits_max,
@@ -88,10 +91,14 @@ def training_loop(cfg: DictConfig) -> None:
             "train/param_norm": param_norm,
             "train/learning_rate": lr
         }
-        wandb.log(metrics, step=t+1)
+        wandb.log(metrics, step=completed_steps)
+        print("Step %d/%d, training loss: %f, logits_max: %f, grad_norm: %f, param_norm: %f, learning_rate: %f" %
+              (completed_steps, num_steps, loss.item(), logits_max, grad_norm, param_norm, lr))
 
-        completed_steps = t+1
-        if completed_steps % cfg.training.eval_interval == 0:
+        if math.isnan(loss.item()) or math.isnan(logits_max) or math.isnan(grad_norm) or math.isnan(param_norm):
+            break
+
+        if cfg.training.need_eval and completed_steps % cfg.training.eval_interval == 0:
             training_loss /= cfg.training.eval_interval
             transformer_lm.eval()
             val_loss = 0.0
